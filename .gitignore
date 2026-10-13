@@ -1,0 +1,88 @@
+# ============================================================
+#  DeployVerse — .gitignore
+#  IMPORTANT: Review before every commit.
+#  Never commit secrets, credentials, or user data.
+# ============================================================
+
+# ── Node.js dependencies ─────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# ── Production build output ──────────────────────────────────
+dist/
+build/
+.vite/
+
+# ── Environment variables — NEVER commit these ───────────────
+# These files may contain passwords, API keys, Jenkins tokens.
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test.local
+.env.production
+.env.production.local
+
+# ── SQLite database files ────────────────────────────────────
+# These contain real user data (emails, hashed passwords).
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Jenkins ──────────────────────────────────────────────────
+jenkins.war
+jenkins.jar
+jenkins.msi
+.jenkins/
+Jenkins/workspace/
+Jenkins/logs/
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+logs/
+
+# ── Coverage and test output ─────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ── OS generated files ───────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── IDE / Editor ─────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.swo
+*~
+
+# ── Temporary files ───────────────────────────────────────────
+*.tmp
+*.temp
+.cache/
+
+# ── Docker (Day 3) ───────────────────────────────────────────
+# Uncomment if you store images locally
+# *.tar
+
+# ── Kubernetes secrets (Day 3) ───────────────────────────────
+# Never commit kubeconfig or secret manifests
+# kubeconfig
+# *-secret.yaml
