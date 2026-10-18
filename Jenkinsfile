@@ -186,6 +186,26 @@ pipeline {
             }
         }
 
+
+        // ── Stage: Docker Build ────────────────────────────────
+        stage('Docker Build') {
+            when {
+                expression {
+                    params.TARGET_DIR == 'Frontend' ||
+                    params.TARGET_DIR == 'both'
+                }
+            }
+            steps {
+                echo "Building DeployVerse frontend Docker image..."
+
+                bat '"C:\\Users\\reddy\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" info'
+
+                bat '"C:\\Users\\reddy\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe" build -t deployverse-frontend:%BUILD_NUMBER% .\\Frontend'
+
+                echo "Docker frontend image build completed."
+            }
+        }
+
         // ── Stage 5: Test ─────────────────────────────────────
         // Runs npm test if a real test script exists.
         // The default package.json test script just prints an
