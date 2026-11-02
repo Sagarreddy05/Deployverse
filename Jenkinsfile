@@ -133,7 +133,9 @@ pipeline {
                     def rawName = params.REPO_URL
                         .replaceAll(/.*\//, '')  // keep last path segment
                         .replaceAll(/\.git$/, '') // strip .git
-                    env.DV_IMAGE_NAME = rawName.toLowerCase().replaceAll(/[^a-z0-9]/, '-')
+                    env.DV_IMAGE_NAME = rawName.toLowerCase()
+                        .replaceAll(/[^a-z0-9]+/, '-')  // squash consecutive non-alphanum to single dash
+                        .replaceAll(/^-+|-+$/, '')        // trim any leading/trailing dashes
 
                     echo "Image name will be: ${env.DV_IMAGE_NAME}:${env.BUILD_NUMBER}"
                     echo "Validation passed."
@@ -269,9 +271,12 @@ pipeline {
 
                     // ── 1. Locate or generate a Dockerfile ──────────────
                     if (env.DV_HAS_ROOT_DOCKERFILE == 'true') {
-                        buildCtx         = '.'
-                        env.DV_APP_PORT  = '3000'
-                        echo "Using existing root Dockerfile."
+                        buildCtx = '.'
+                        // Auto-detect container port from the EXPOSE instruction
+                        def dfContent = readFile('Dockerfile')
+                        def m = (dfContent =~ /(?m)^EXPOSE\s+(\d+)/)
+                        env.DV_APP_PORT = m ? m[0][1] : '3000'
+                        echo "Using existing root Dockerfile (detected port: ${env.DV_APP_PORT})."
 
                     } else if (env.DV_HAS_FRONTEND_DOCKERFILE == 'true') {
                         buildCtx         = '.\\Frontend'
@@ -358,11 +363,13 @@ CMD [\"node\", \"${mainEntry}\"]
                     def imageName = env.DV_IMAGE_FULL
                     def appPort   = env.DV_APP_PORT ?: '3000'
 
-                    // Load the locally-built image into Minikube's registry
+                    // ── Load image into Minikube ─────────────────────────
                     echo "Loading ${imageName} into Minikube..."
                     bat "minikube image load ${imageName}"
 
-                    // Generate a minimal Deployment + NodePort Service manifest
+                    // ── Apply Kubernetes manifest ─────────────────────────
+                    // Generates a Deployment + NodePort Service.
+                    // imagePullPolicy: Never — uses the locally-loaded image.
                     def manifest = """
 apiVersion: apps/v1
 kind: Deployment
@@ -405,19 +412,34 @@ spec:
                     writeFile file: 'dv-deploy.yaml', text: manifest
                     bat "kubectl apply -f dv-deploy.yaml"
 
+                    // ── Wait for rollout ──────────────────────────────────
                     bat "kubectl rollout status deployment/${appName} --timeout=120s"
 
-                    // Capture NodePort URL
-                    def raw = bat(
-                        script: "minikube service ${appName} --url 2>nul",
+                    // ── Report access URL ─────────────────────────────────
+                    // 'minikube service --url' blocks on Docker-driver Windows.
+                    // Build URL from minikube ip + the assigned NodePort instead.
+                    def nodePort = bat(
+                        script: "kubectl get svc ${appName} -o jsonpath=\"{.spec.ports[0].nodePort}\"",
                         returnStdout: true
-                    ).trim()
-                    def url = raw.split('\n').last().trim()
+                    ).trim().tokenize('\n').last().trim()
+
+                    def minikubeIp = bat(
+                        script: 'minikube ip',
+                        returnStdout: true
+                    ).trim().tokenize('\n').last().trim()
+
+                    def url = "http://${minikubeIp}:${nodePort}"
 
                     env.DV_DEPLOY_URL = url
                     echo "=========================================="
-                    echo " ✅ DEPLOYED: ${appName}"
+                    echo " \u2705 DEPLOYED: ${appName}"
+                    echo "    Image   : ${imageName}"
+                    echo "    Port    : ${appPort}"
+                    echo "    NodePort: ${nodePort}"
                     echo "    URL     : ${url}"
+                    echo "    Note    : On Docker-driver Windows open a"
+                    echo "              separate terminal and run:"
+                    echo "              minikube service ${appName} --url"
                     echo "=========================================="
                 }
             }
