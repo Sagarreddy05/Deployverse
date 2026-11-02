@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployverse-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployverse-backend
+  template:
+    metadata:
+      labels:
+        app: deployverse-backend
+    spec:
+      containers:
+        - name: backend
+          image: deployverse-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DATA_DIR
+              value: "/app/data"
+            # JENKINS_URL: host.docker.internal resolves to the Windows host
+            # from inside Minikube (Docker driver) — Jenkins runs on the host
+            # at port 8080. This is correct for Minikube on Windows.
+            - name: JENKINS_URL
+              value: "http://host.docker.internal:8080"
+            - name: JENKINS_JOB
+              value: "DeployVerse-CI"
+            # Credentials come from the K8s Secret (never hardcoded here)
+            - name: JENKINS_USER
+              valueFrom:
+                secretKeyRef:
+                  name: deployverse-jenkins
+                  key: username
+            - name: JENKINS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: deployverse-jenkins
+                  key: api-token
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/data
+          # Readiness: only route traffic once the backend health endpoint responds
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          # Liveness: restart Pod if health endpoint stops responding
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: deployverse-backend-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deployverse-backend
+spec:
+  selector:
+    app: deployverse-backend
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP

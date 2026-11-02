@@ -1,0 +1,30 @@
+# DeployVerse Backend — .dockerignore
+#
+# Controls what gets sent to the Docker build daemon.
+# Keep this lean — the backend only needs src/ and package*.json.
+
+# Dependencies (re-installed inside container via npm ci --omit=dev)
+node_modules/
+
+# Dev environment file — credentials must NOT go into the image.
+# In Docker: env vars come from the docker run -e flags or K8s Secrets.
+.env
+.env.*
+
+# SQLite database files — data is mounted via PersistentVolumeClaim in K8s,
+# or via docker run -v for local testing. Never bake DB into image.
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups and helper scripts at repo root
+*.backup*
+*.bak
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

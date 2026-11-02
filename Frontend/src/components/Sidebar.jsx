@@ -1,3 +1,5 @@
+import { NavLink } from "react-router-dom";
+
 /* ── SVG Icons ── */
 const IcoDash = () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -56,13 +58,23 @@ const IcoGear = () => (
     </svg>
 );
 
-const IcoBell = () => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M7 1.5A3.5 3.5 0 003.5 5v3L2 9.5h10L10.5 8V5A3.5 3.5 0 007 1.5z"
-              stroke="currentColor" strokeWidth="1.1" fill="none"/>
-        <path d="M5.5 10.5a1.5 1.5 0 003 0" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
-    </svg>
-);
+// NavItem — uses React Router NavLink for automatic active state
+// end={true} prevents "/" from matching every child path in React Router v6
+function NavItem({ to, icon, label, end }) {
+    return (
+        <NavLink
+            to={to}
+            end={end}
+            className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
+            aria-label={label}
+            title={label}
+            style={{ textDecoration: "none", display: "flex", alignItems: "center" }}
+        >
+            <span className="sb-icon" aria-hidden="true">{icon}</span>
+            <span className="sb-label">{label}</span>
+        </NavLink>
+    );
+}
 
 function Sidebar() {
     return (
@@ -79,48 +91,19 @@ function Sidebar() {
 
                 <div className="sb-group" aria-hidden="true">Main</div>
 
-                <button className="sb-item active" aria-current="page" aria-label="Dashboard" title="Dashboard">
-                    <span className="sb-icon" aria-hidden="true"><IcoDash /></span>
-                    <span className="sb-label">Dashboard</span>
-                </button>
-
-                <button className="sb-item" aria-label="Projects" title="Projects">
-                    <span className="sb-icon" aria-hidden="true"><IcoFolders /></span>
-                    <span className="sb-label">Projects</span>
-                </button>
-
-                <button className="sb-item" aria-label="Deployments" title="Deployments">
-                    <span className="sb-icon" aria-hidden="true"><IcoRocket /></span>
-                    <span className="sb-label">Deployments</span>
-                    <span className="sb-coming">Soon</span>
-                </button>
-
-                <button className="sb-item" aria-label="Pipelines" title="Pipelines">
-                    <span className="sb-icon" aria-hidden="true"><IcoPipes /></span>
-                    <span className="sb-label">Pipelines</span>
-                    <span className="sb-coming">Soon</span>
-                </button>
+                <NavItem to="/"            icon={<IcoDash />}    label="Dashboard"   end />
+                <NavItem to="/projects"    icon={<IcoFolders />} label="Projects"    />
+                <NavItem to="/deployments" icon={<IcoRocket />}  label="Deployments" />
+                <NavItem to="/pipelines"   icon={<IcoPipes />}   label="Pipelines"   />
 
                 <div className="sb-group" aria-hidden="true">Infrastructure</div>
 
-                <button className="sb-item" aria-label="Monitoring" title="Monitoring">
-                    <span className="sb-icon" aria-hidden="true"><IcoMonitor /></span>
-                    <span className="sb-label">Monitoring</span>
-                    <span className="sb-coming">Soon</span>
-                </button>
-
-                <button className="sb-item" aria-label="AWS" title="AWS">
-                    <span className="sb-icon" aria-hidden="true"><IcoCloud /></span>
-                    <span className="sb-label">AWS</span>
-                    <span className="sb-coming">Soon</span>
-                </button>
+                <NavItem to="/monitoring"  icon={<IcoMonitor />} label="Monitoring"  />
+                <NavItem to="/aws"         icon={<IcoCloud />}   label="AWS"         />
 
                 <div className="sb-group" aria-hidden="true">System</div>
 
-                <button className="sb-item" aria-label="Settings" title="Settings">
-                    <span className="sb-icon" aria-hidden="true"><IcoGear /></span>
-                    <span className="sb-label">Settings</span>
-                </button>
+                <NavItem to="/settings"    icon={<IcoGear />}    label="Settings"    />
 
             </nav>
 

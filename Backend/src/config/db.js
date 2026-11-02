@@ -1,6 +1,6 @@
-const sqlite3 = require("sqlite3").verbose();
+﻿const sqlite3 = require("sqlite3").verbose();
 
-const db = new sqlite3.Database("./deployverse.db", (err) => {
+const db = new sqlite3.Database(process.env.DATA_DIR ? require("path").join(process.env.DATA_DIR, "deployverse.db") : "./deployverse.db", (err) => {
     if (err) {
         console.error("Database connection failed:", err.message);
     } else {

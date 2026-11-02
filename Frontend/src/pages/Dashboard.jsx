@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { getProjects, createProject } from "../services/api";
+import {
+    getProjects,
+    createProject,
+    deleteProject,
+    getJenkinsStatus,
+    getJenkinsHistory,
+    triggerJenkins
+} from "../services/api";
 
 import Sidebar     from "../components/Sidebar";
 import Topbar      from "../components/Topbar";
@@ -32,12 +39,12 @@ const isError = (msg) => {
     const l = msg.toLowerCase();
     return l.includes("fail") || l.includes("error") ||
            l.includes("invalid") || l.includes("exist") ||
-           l.includes("wrong");
+           l.includes("wrong") || l.includes("reject");
 };
 
 function Dashboard({ user, onLogout }) {
 
-    /* ── State — identical to original ── */
+    /* ── State ── */
     const [projects,       setProjects]       = useState([]);
     const [showForm,       setShowForm]       = useState(false);
     const [name,           setName]           = useState("");
@@ -46,11 +53,25 @@ function Dashboard({ user, onLogout }) {
     const [message,        setMessage]        = useState("");
     const [loading,        setLoading]        = useState(false);
 
-    useEffect(() => {
-        loadProjects();
-    }, [user.id]);
+    const [jenkinsBuild,   setJenkinsBuild]   = useState(null);
+    const [jenkinsHistory, setJenkinsHistory] = useState([]);
+    const [jenkinsError,   setJenkinsError]   = useState("");
 
-    /* ── API calls — identical to original ── */
+    /* ── Data loaders ── */
+    const loadJenkinsData = async () => {
+        try {
+            const [statusData, historyData] = await Promise.all([
+                getJenkinsStatus(),
+                getJenkinsHistory()
+            ]);
+            setJenkinsBuild(statusData.build || null);
+            setJenkinsHistory(historyData.builds || []);
+            setJenkinsError("");
+        } catch (error) {
+            setJenkinsError(error.message || "Jenkins connection failed");
+        }
+    };
+
     const loadProjects = async () => {
         try {
             const data = await getProjects(user.id);
@@ -60,11 +81,23 @@ function Dashboard({ user, onLogout }) {
         }
     };
 
+    useEffect(() => { loadProjects(); }, [user.id]);
+
+    useEffect(() => {
+        loadJenkinsData();
+        const id = setInterval(loadJenkinsData, 15000);
+        return () => clearInterval(id);
+    }, []);
+
+    /* ── Derived stats from real data ── */
+    const successBuilds = jenkinsHistory.filter(b => b.result === "SUCCESS").length;
+    const failedBuilds  = jenkinsHistory.filter(b => b.result === "FAILURE").length;
+
+    /* ── Handlers ── */
     const handleAddProject = async (event) => {
         event.preventDefault();
         setMessage("");
         setLoading(true);
-
         try {
             const data = await createProject({
                 user_id: user.id,
@@ -72,14 +105,12 @@ function Dashboard({ user, onLogout }) {
                 repository_url: repositoryUrl,
                 branch,
             });
-
             setMessage(data.message);
             setName("");
             setRepositoryUrl("");
             setBranch("main");
             setShowForm(false);
             await loadProjects();
-
         } catch (error) {
             setMessage(error.message);
         } finally {
@@ -87,8 +118,29 @@ function Dashboard({ user, onLogout }) {
         }
     };
 
-    const handleDeploy = () => {
-        alert("Deployment pipeline will be connected on Day 2.");
+    // handleDeploy receives the specific project being deployed
+    const handleDeploy = async (project) => {
+        try {
+            setMessage(`Triggering Jenkins pipeline for "${project.name}"…`);
+            const data = await triggerJenkins(project);
+            const msg = data.running
+                ? `A build is already in progress. Check Pipelines for status.`
+                : (data.message || "Jenkins pipeline triggered successfully.");
+            setMessage(msg);
+            setTimeout(loadJenkinsData, 3000);
+        } catch (error) {
+            setMessage(error.message || "Unable to connect to Jenkins.");
+        }
+    };
+
+    const handleDeleteProject = async (projectId) => {
+        try {
+            await deleteProject(projectId, user.id);
+            setMessage("Project deleted.");
+            await loadProjects();
+        } catch (error) {
+            setMessage(error.message);
+        }
     };
 
     return (
@@ -106,7 +158,7 @@ function Dashboard({ user, onLogout }) {
                 {/* Content */}
                 <main className="dash-content">
 
-                    {/* ═══ HERO ═══════════════════════════════════════ */}
+                    {/* ══ HERO ══════════════════════════════════════════════ */}
                     <section className="dash-hero" aria-label="Dashboard overview">
 
                         <div className="hero-kicker" aria-hidden="true">
@@ -136,7 +188,7 @@ function Dashboard({ user, onLogout }) {
                                 Deploy Project
                             </button>
 
-                            <button className="btn-outline">
+                            <button className="btn-outline" onClick={loadJenkinsData}>
                                 View Pipeline
                                 <IcoArrowRight aria-hidden="true" />
                             </button>
@@ -145,11 +197,9 @@ function Dashboard({ user, onLogout }) {
                     </section>
 
 
-                    {/* ═══ STATS ══════════════════════════════════════ */}
-                    <section
-                        className="stats-strip"
-                        aria-label="Key statistics"
-                    >
+                    {/* ══ STATS — real data from backend ════════════════════ */}
+                    <section className="stats-strip" aria-label="Key statistics">
+
                         <div className="stat-cell">
                             <div className="stat-pip pip-purple" aria-hidden="true" />
                             <div className="stat-tag">Projects</div>
@@ -160,27 +210,28 @@ function Dashboard({ user, onLogout }) {
                         <div className="stat-cell">
                             <div className="stat-pip pip-cyan" aria-hidden="true" />
                             <div className="stat-tag">Deployments</div>
-                            <div className="stat-num na">--</div>
-                            <div className="stat-hint">Available on Day 2</div>
+                            <div className="stat-num">{jenkinsHistory.length}</div>
+                            <div className="stat-hint">Jenkins builds</div>
                         </div>
 
                         <div className="stat-cell">
                             <div className="stat-pip pip-green" aria-hidden="true" />
-                            <div className="stat-tag">Running</div>
-                            <div className="stat-num na">--</div>
-                            <div className="stat-hint">Available on Day 2</div>
+                            <div className="stat-tag">Successful</div>
+                            <div className="stat-num">{successBuilds}</div>
+                            <div className="stat-hint">Build successes</div>
                         </div>
 
                         <div className="stat-cell">
                             <div className="stat-pip pip-orange" aria-hidden="true" />
                             <div className="stat-tag">Failed</div>
-                            <div className="stat-num na">--</div>
-                            <div className="stat-hint">Available on Day 2</div>
+                            <div className="stat-num">{failedBuilds}</div>
+                            <div className="stat-hint">Build failures</div>
                         </div>
+
                     </section>
 
 
-                    {/* ═══ ADD PROJECT PANEL ══════════════════════════ */}
+                    {/* ══ ADD PROJECT PANEL ═════════════════════════════════ */}
                     {showForm && (
                         <div
                             className="add-panel"
@@ -203,15 +254,10 @@ function Dashboard({ user, onLogout }) {
                             </div>
 
                             <div className="add-panel-body">
-                                <form
-                                    className="proj-form"
-                                    onSubmit={handleAddProject}
-                                >
+                                <form className="proj-form" onSubmit={handleAddProject}>
+
                                     <div className="form-grp">
-                                        <label
-                                            className="form-lbl"
-                                            htmlFor="proj-name"
-                                        >
+                                        <label className="form-lbl" htmlFor="proj-name">
                                             Project Name
                                         </label>
                                         <input
@@ -226,10 +272,7 @@ function Dashboard({ user, onLogout }) {
                                     </div>
 
                                     <div className="form-grp">
-                                        <label
-                                            className="form-lbl"
-                                            htmlFor="proj-repo"
-                                        >
+                                        <label className="form-lbl" htmlFor="proj-repo">
                                             Repository URL
                                         </label>
                                         <input
@@ -244,10 +287,7 @@ function Dashboard({ user, onLogout }) {
                                     </div>
 
                                     <div className="form-grp">
-                                        <label
-                                            className="form-lbl"
-                                            htmlFor="proj-branch"
-                                        >
+                                        <label className="form-lbl" htmlFor="proj-branch">
                                             Branch
                                         </label>
                                         <input
@@ -276,13 +316,14 @@ function Dashboard({ user, onLogout }) {
                                             {loading ? "Adding…" : "Add Project"}
                                         </button>
                                     </div>
+
                                 </form>
                             </div>
                         </div>
                     )}
 
 
-                    {/* ═══ NOTIFICATION ═══════════════════════════════ */}
+                    {/* ══ NOTIFICATION ══════════════════════════════════════ */}
                     {message && (
                         <div
                             className={`notify ${isError(message) ? "err" : "ok"}`}
@@ -297,11 +338,51 @@ function Dashboard({ user, onLogout }) {
                     )}
 
 
-                    {/* ═══ PROJECTS ════════════════════════════════════ */}
-                    <section
-                        className="projects-section"
-                        aria-label="Your projects"
-                    >
+                    {/* ══ JENKINS STATUS BANNER ═════════════════════════════ */}
+                    {(jenkinsBuild || jenkinsError) && (
+                        <div style={{
+                            padding: "0.75rem 1rem",
+                            borderRadius: "8px",
+                            background: jenkinsError
+                                ? "rgba(239,68,68,0.08)"
+                                : jenkinsBuild?.result === "SUCCESS"
+                                    ? "rgba(34,197,94,0.08)"
+                                    : jenkinsBuild?.result === "FAILURE"
+                                        ? "rgba(239,68,68,0.08)"
+                                        : "rgba(245,158,11,0.08)",
+                            border: `1px solid ${jenkinsError ? "rgba(239,68,68,0.25)"
+                                : jenkinsBuild?.result === "SUCCESS" ? "rgba(34,197,94,0.25)"
+                                : jenkinsBuild?.result === "FAILURE" ? "rgba(239,68,68,0.25)"
+                                : "rgba(245,158,11,0.25)"}`,
+                            fontSize: "0.82rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.8rem",
+                            marginBottom: "1rem",
+                        }}>
+                            {jenkinsError ? (
+                                <span style={{ color: "#ef4444" }}>⚠ Jenkins: {jenkinsError}</span>
+                            ) : (
+                                <span>
+                                    Jenkins Build{" "}
+                                    <strong>#{jenkinsBuild.number}</strong>
+                                    {" — "}
+                                    <span style={{
+                                        color: jenkinsBuild.result === "SUCCESS" ? "#22c55e"
+                                             : jenkinsBuild.result === "FAILURE" ? "#ef4444"
+                                             : "#f59e0b",
+                                        fontWeight: 700,
+                                    }}>
+                                        {jenkinsBuild.building ? "Running…" : (jenkinsBuild.result || "Unknown")}
+                                    </span>
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+
+                    {/* ══ PROJECTS ══════════════════════════════════════════ */}
+                    <section className="projects-section" aria-label="Your projects">
                         <div className="sec-head">
                             <div className="sec-head-left">
                                 <div className="sec-kicker">GitHub Repositories</div>
@@ -349,7 +430,8 @@ function Dashboard({ user, onLogout }) {
                                     <ProjectCard
                                         key={project.id}
                                         project={project}
-                                        onDeploy={handleDeploy}
+                                        onDeploy={() => handleDeploy(project)}
+                                        onDelete={() => handleDeleteProject(project.id)}
                                     />
                                 ))}
                             </div>
@@ -358,8 +440,8 @@ function Dashboard({ user, onLogout }) {
                     </section>
 
 
-                    {/* ═══ PIPELINE ════════════════════════════════════ */}
-                    <PipelineViz />
+                    {/* ══ PIPELINE ══════════════════════════════════════════ */}
+                    <PipelineViz build={jenkinsBuild} />
 
                 </main>
 

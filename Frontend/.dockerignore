@@ -1,0 +1,33 @@
+# DeployVerse Frontend — .dockerignore
+#
+# Docker does NOT use .gitignore by default — this file controls what gets
+# sent to the Docker build daemon as the build context.
+#
+# Key difference from .gitignore:
+#   .env.production IS included here (needed by Vite during build inside
+#   the container so VITE_API_URL="" is baked into the JS bundle).
+#   .env (dev config) is excluded — not needed in the container.
+
+# Dependencies (re-installed inside container via npm ci)
+node_modules/
+
+# Previous build output (rebuilt inside container)
+dist/
+dist-ssr/
+
+# Dev-only environment file — not needed in production image
+.env
+.env.local
+.env.*.local
+
+# NOTE: .env.production is intentionally NOT listed here.
+# It must be present in the build context so Vite can read VITE_API_URL="".
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db

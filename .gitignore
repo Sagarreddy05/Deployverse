@@ -25,6 +25,10 @@ build/
 .env.production
 .env.production.local
 
+# .backend-recreate.env — root-level file that contains Jenkins API token
+.backend-recreate.env
+
+
 # ── SQLite database files ────────────────────────────────────
 # These contain real user data (emails, hashed passwords).
 *.db
